@@ -17,7 +17,6 @@
             </h1>
             <p id="difficultyLabel" class="difficulty-label">Difficulty: Normal</p>
         </header>
-
         <div id="mobileBotSticky" class="mobile-bot-sticky" aria-hidden="true">
             <div class="mobile-bot-sticky-inner">
                 <div class="mobile-bot-sticky-label">Bot</div>
@@ -30,7 +29,6 @@
                 <div id="mobileBotStickyCards" class="mobile-bot-sticky-cards"></div>
             </div>
         </div>
-
         <div class="bot-area">
             <!-- Health Bars -->
             <div class="health-container">
@@ -53,7 +51,6 @@
             <h2>Bot's Hand</h2>
             <div class="cards-container" id="botHand"></div>
         </div>
-
         <div class="game-info">
             <div class="score-board compact-score-board">
                 <div class="bot-score">
@@ -69,12 +66,10 @@
                     <span id="playerScore">0</span>
                 </div>
             </div>
-            
             <div class="status-bar">
                 <p id="gameStatus">Click "New Game" to start!</p>
             </div>
         </div>
-
         <div class="player-area">
             <!-- Health Bars -->
             <div class="health-container">
@@ -86,13 +81,12 @@
                     <span id="playerHealthText">100%</span>
                 </div>
             </div>
-            <!-- Reshuffle Counter and Joker Indicator -->
+            <!-- Reshuffle Counter -->
             <div class="player-special-controls">
                 <div class="reshuffle-counter" id="playerReshuffleCounter">
                     <span>Reshuffle: <span id="playerReshuffleCount">0</span>/<span id="playerReshuffleMax">2</span></span>
                 </div>
                 <button id="reshuffleBtn" class="btn btn-reshuffle" disabled>Reshuffle</button>
-                <button id="jokerBtn" class="btn btn-joker" style="display: none;">Joker</button>
             </div>
             <div class="table-area">
                 <h3>Your Table Cards (<span id="playerTableCount">0</span>/5)</h3>
@@ -105,22 +99,24 @@
                     <button id="hitBtn" class="btn btn-hit" disabled>Hit</button>
                     <button id="standBtn" class="btn btn-stand" disabled>Stand</button>
                 </div>
+                <!-- Power-up Action Buttons (shown when Joker is selected) -->
+                <div id="jokerActions" class="controls joker-actions" style="display: none;">
+                    <button id="swapCardBtn" class="btn btn-swap">Swap Card</button>
+                    <button id="reshuffleEnemyBtn" class="btn btn-reshuffle">Reshuffle Enemy</button>
+                </div>
             </center>
         </div>
-
         <div class="controls">
             <button id="newGameBtn" class="btn btn-new">New Game</button>
             <button id="changeDifficultyBtn" class="btn btn-stand">Change Difficulty</button>
             <button id="historyBtn" class="btn btn-info">History</button>
-            <button id="rulesBtn" class="btn btn-info">Rules & Credits</button>
+            <button id="rulesBtn" class="btn btn-info">Rules &amp; Credits</button>
         </div>
-
         <div class="audio-controls">
             <label for="volumeSlider">Volume</label>
             <input id="volumeSlider" type="range" min="0" max="300" step="5" value="140" />
             <span id="volumeValue">140%</span>
         </div>
-
         <!-- Difficulty Modal -->
         <div class="modal" id="difficultyModal">
             <div class="modal-content">
@@ -135,13 +131,12 @@
                 <div class="difficulty-info">
                     <p><small>Easy: Relaxed gameplay.</small></p>
                     <p><small>Normal: Target hidden on 1st turn.</small></p>
-                    <p><small>Hard: Target hidden & Smarter Bot.</small></p>
+                    <p><small>Hard: Target hidden &amp; Smarter Bot.</small></p>
                     <p id="veryHardUnlockInfo"><small>Very Hard: Unlock after 5 wins in Hard mode.</small></p>
                     <p id="veryHardEffectInfo" style="display: none;"><small>Very Hard: Target appears on Round 3.</small></p>
                 </div>
             </div>
         </div>
-
         <div class="modal" id="resultModal">
             <div class="modal-content">
                 <h2 id="resultTitle">Game Over!</h2>
@@ -149,7 +144,6 @@
                 <button id="playAgainBtn" class="btn btn-new">Play Again</button>
             </div>
         </div>
-
         <div class="modal" id="historyModal">
             <div class="modal-content history-modal-content">
                 <h2>Match History</h2>
@@ -158,7 +152,6 @@
                 <button id="closeHistoryBtn" class="btn btn-new">Close</button>
             </div>
         </div>
-
         <div class="modal" id="rulesModal">
             <div class="rules-modal modal-content modal-content-rules" style="max-height: 70vh;">
                 <h2 class="rules-modal-title">How To Play</h2>
@@ -172,10 +165,10 @@
                         <p><strong>Note:</strong> Maximum 5 cards on the table for each side.</p>
                         <p><strong>Health:</strong> Loser loses health based on how close the winner was to the target.</p>
                         <p><strong>Reshuffle:</strong> Replace cards in your hand with new ones (max 2 per game).</p>
-                        <p><strong>Joker:</strong> Special card that can reshuffle opponent's hand or swap all cards.</p>
+                        <p><strong>Power-up Cards:</strong> Special cards with unique abilities!</p>
                     </div>
                     <div class="special-card-info">
-                        <h3>Special Cards & Score Values</h3>
+                        <h3>Special Cards &amp; Score Values</h3>
                         <p><strong>J = 10</strong>, <strong>Q = 10</strong>, <strong>K = 10</strong>, <strong>A = 11</strong></p>
                         <div class="sample-cards">
                             <div class="card hearts sample-card">
@@ -196,6 +189,12 @@
                             </div>
                         </div>
                     </div>
+                    <div class="special-card-info">
+                        <h3>Power-Up Cards</h3>
+                        <p><strong>🤡 Joker:</strong> Swap your card with enemy or reshuffle enemy's hand.</p>
+                        <p><strong>✖️ X2:</strong> Doubles the value of all your hit cards!</p>
+                        <p><strong>👁️ Reveal:</strong> Shows the target number and reveals enemy cards throughout the game!</p>
+                    </div>
                     <div class="credit-box">
                         <p><strong>Game Creator:</strong> Trisna Almuti</p>
                         <a id="instagramBtn" class="btn btn-instagram" href="https://trisna-info.pages.dev/" target="_blank" rel="noopener noreferrer">Portfolio</a>
@@ -206,34 +205,29 @@
                 </div>
             </div>
         </div>
-
-        <!-- Joker Action Modal -->
-        <div class="modal" id="jokerModal">
+        <!-- Power-Up Confirmation Modal -->
+        <div class="modal" id="powerUpConfirmModal">
             <div class="modal-content">
-                <h2>Joker Power Up</h2>
-                <div class="joker-modal-icon">🤡</div>
-                <p>Choose your joker action:</p>
-                <div class="joker-buttons">
-                    <button id="jokerReshuffleBtn" class="btn btn-joker-action btn-reshuffle">
-                        <span>🔀</span> Reshuffle Opponent
-                    </button>
-                    <button id="jokerSwapBtn" class="btn btn-joker-action btn-swap">
-                        <span>🔄</span> Swap All Cards
-                    </button>
+                <h2 id="powerUpConfirmTitle">Use Power-Up?</h2>
+                <div id="powerUpConfirmIcon" class="power-up-modal-icon"></div>
+                <p id="powerUpConfirmMessage">Are you sure you want to use this power-up?</p>
+                <div class="preview-actions">
+                    <button id="confirmPowerUpBtn" class="btn btn-hit">Use</button>
+                    <button id="cancelPowerUpBtn" class="btn btn-new">Cancel</button>
                 </div>
-                <p class="joker-warning">⚠️ Joker can only be used once!</p>
             </div>
         </div>
-
-        <!-- Opponent Cards Preview Modal -->
-        <div class="modal" id="opponentPreviewModal">
+        <!-- Joker Action Preview Modal (for Swap/Reshuffle Enemy) -->
+        <div class="modal" id="jokerPreviewModal">
             <div class="modal-content">
-                <h2>Opponent's Hand</h2>
-                <div id="opponentPreviewCards" class="cards-container"></div>
-                <p>Are you sure you want to swap all cards?</p>
+                <h2 id="jokerPreviewTitle">Joker Action</h2>
+                <div class="joker-preview-icon">🤡</div>
+                <p id="jokerPreviewMessage">Preview opponent's cards before action:</p>
+                <div id="jokerPreviewCards" class="cards-container"></div>
+                <p id="jokerPreviewWarning" class="joker-warning"></p>
                 <div class="preview-actions">
-                    <button id="confirmSwapBtn" class="btn btn-swap">Confirm Swap</button>
-                    <button id="cancelSwapBtn" class="btn btn-new">Cancel</button>
+                    <button id="confirmJokerActionBtn" class="btn btn-swap">Confirm</button>
+                    <button id="cancelJokerActionBtn" class="btn btn-new">Cancel</button>
                 </div>
             </div>
         </div>
