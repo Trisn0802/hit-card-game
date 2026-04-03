@@ -27,7 +27,7 @@ let gameState = {
     botScore: 0,
     playerHealth: 100,
     botHealth: 100,
-    totalRounds: 3,
+    totalRounds: 6,
     currentRound: 1,
     actionsThisRound: 0,
     firstActor: 'player',
@@ -35,7 +35,13 @@ let gameState = {
     selectedCard: null,
     winnerEvaluationInProgress: false,
     pendingHealthUpdate: null,
-    gameOver: false
+    gameOver: false,
+    playerReshuffleCount: 0,
+    botReshuffleCount: 0,
+    maxReshuffles: 2,
+    playerHasJoker: false,
+    botHasJoker: false,
+    jokerUsed: false
 };
 
 // DOM Elements
@@ -60,9 +66,12 @@ const mobileBotStickyEl = document.getElementById('mobileBotSticky');
 const mobileBotStickyCardsEl = document.getElementById('mobileBotStickyCards');
 const mobileBotStickyHealthFillEl = document.getElementById('mobileBotStickyHealthFill');
 const mobileBotStickyHealthTextEl = document.getElementById('mobileBotStickyHealthText');
+const mobileBotStickyLabelEl = document.querySelector('.mobile-bot-sticky-label');
 const resultModal = document.getElementById('resultModal');
 const rulesModal = document.getElementById('rulesModal');
 const historyModal = document.getElementById('historyModal');
+const jokerModal = document.getElementById('jokerModal');
+const opponentPreviewModal = document.getElementById('opponentPreviewModal');
 const resultTitle = document.getElementById('resultTitle');
 const resultMessage = document.getElementById('resultMessage');
 const historySummary = document.getElementById('historySummary');
@@ -75,6 +84,17 @@ const veryHardEffectInfo = document.getElementById('veryHardEffectInfo');
 const playAgainBtn = document.getElementById('playAgainBtn');
 const changeDifficultyBtn = document.getElementById('changeDifficultyBtn');
 const difficultyLabel = document.getElementById('difficultyLabel');
+const reshuffleBtn = document.getElementById('reshuffleBtn');
+const jokerBtn = document.getElementById('jokerBtn');
+const jokerReshuffleBtn = document.getElementById('jokerReshuffleBtn');
+const jokerSwapBtn = document.getElementById('jokerSwapBtn');
+const confirmSwapBtn = document.getElementById('confirmSwapBtn');
+const cancelSwapBtn = document.getElementById('cancelSwapBtn');
+const opponentPreviewCards = document.getElementById('opponentPreviewCards');
+const playerReshuffleCountEl = document.getElementById('playerReshuffleCount');
+const botReshuffleCountEl = document.getElementById('botReshuffleCount');
+const playerReshuffleMaxEl = document.getElementById('playerReshuffleMax');
+const botReshuffleMaxEl = document.getElementById('botReshuffleMax');
 
 // Health Bar Elements
 const playerHealthBar = document.getElementById('playerHealthBar');
@@ -89,15 +109,14 @@ const easyBtn = document.getElementById('easyBtn');
 const normalBtn = document.getElementById('normalBtn');
 const hardBtn = document.getElementById('hardBtn');
 const veryHardBtn = document.getElementById('veryHardBtn');
+
 const VERY_HARD_UNLOCK_WINS = 5;
 const PROGRESS_STORAGE_KEY = 'hitCardPokerProgressV1';
 const HISTORY_STORAGE_KEY = 'hitCardPokerMatchHistoryV1';
 const AUDIO_STORAGE_KEY = 'hitCardPokerAudioSettingsV1';
 const MAX_VOLUME_PERCENT = 300;
-let gameProgress = {
-    hardWins: 0,
-    veryHardUnlocked: false
-};
+
+let gameProgress = { hardWins: 0, veryHardUnlocked: false };
 let matchHistory = [];
 let lastCardHoverSoundAt = 0;
 let masterVolume = 1.4;
@@ -122,17 +141,14 @@ function ensureAudioContext() {
 function playTone(frequency, duration = 0.09, type = 'sine', volume = 0.06) {
     const ctx = ensureAudioContext();
     if (!ctx) return;
-
     const oscillator = ctx.createOscillator();
     const gainNode = ctx.createGain();
     oscillator.type = type;
     oscillator.frequency.setValueAtTime(frequency, ctx.currentTime);
-
     const scaledVolume = Math.max(0, Math.min(1, volume * masterVolume));
     gainNode.gain.setValueAtTime(0, ctx.currentTime);
     gainNode.gain.linearRampToValueAtTime(scaledVolume, ctx.currentTime + 0.01);
     gainNode.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
-
     oscillator.connect(gainNode);
     gainNode.connect(ctx.destination);
     oscillator.start(ctx.currentTime);
@@ -205,7 +221,6 @@ function loadProgress() {
     try {
         const raw = localStorage.getItem(PROGRESS_STORAGE_KEY);
         if (!raw) return;
-
         const parsed = JSON.parse(raw);
         const hardWins = Number(parsed?.hardWins);
         gameProgress.hardWins = Number.isFinite(hardWins) ? Math.max(0, Math.floor(hardWins)) : 0;
@@ -259,14 +274,12 @@ function renderHistoryModal() {
     const losses = matchHistory.filter(item => item.result === 'loss').length;
     historySummary.textContent = `Total Wins: ${wins} | Total Losses: ${losses}`;
     historyList.innerHTML = '';
-
     if (matchHistory.length === 0) {
         const emptyItem = document.createElement('li');
         emptyItem.textContent = 'No match history yet. Finish a full game first.';
         historyList.appendChild(emptyItem);
         return;
     }
-
     matchHistory.forEach((entry, index) => {
         const item = document.createElement('li');
         item.classList.add(entry.result === 'win' ? 'win' : 'loss');
@@ -289,7 +302,6 @@ function addMatchHistory(result) {
         botScore: gameState.botScore,
         playedAt: new Date().toISOString()
     };
-
     matchHistory.unshift(entry);
     if (matchHistory.length > 100) {
         matchHistory = matchHistory.slice(0, 100);
@@ -311,7 +323,6 @@ function updateVeryHardButtonState() {
         }
         return;
     }
-
     const remaining = Math.max(0, VERY_HARD_UNLOCK_WINS - gameProgress.hardWins);
     veryHardBtn.disabled = true;
     veryHardBtn.textContent = `Very Hard (Locked ${gameProgress.hardWins}/${VERY_HARD_UNLOCK_WINS})`;
@@ -327,13 +338,11 @@ function updateVeryHardButtonState() {
 function registerHardModeWinIfUnlocked() {
     if (gameState.difficulty !== 'hard') return;
     if (gameProgress.veryHardUnlocked) return;
-
     gameProgress.hardWins += 1;
     if (gameProgress.hardWins >= VERY_HARD_UNLOCK_WINS) {
         gameProgress.hardWins = VERY_HARD_UNLOCK_WINS;
         gameProgress.veryHardUnlocked = true;
     }
-
     saveProgress();
     updateVeryHardButtonState();
 }
@@ -343,7 +352,9 @@ function isBotHealthEnabled() {
 }
 
 function getBotDamageMultiplier() {
-    return gameState.difficulty === 'veryHard' ? 1.5 : 1;
+    // Changed from 1.5 to 1 as requested.
+    // Bot damage in Very Hard mode is now standard.
+    return 1;
 }
 
 function shouldHideTargetAtStart() {
@@ -353,8 +364,8 @@ function shouldHideTargetAtStart() {
 function shouldRevealTargetNow() {
     if (!gameState.targetHidden) return false;
     if (gameState.difficulty === 'veryHard') {
-        // Reveal at the beginning of Round 3 (after Round 2 ends).
-        return gameState.currentRound === 2 && gameState.actionsThisRound >= 2;
+        // Reveal at the beginning of Round 5 (after Round 4 ends).
+        return gameState.currentRound === 4 && gameState.actionsThisRound >= 2;
     }
     // Normal/Hard reveal after first round finishes.
     return gameState.currentRound === 1 && gameState.actionsThisRound >= 2;
@@ -407,10 +418,8 @@ function getMobileStickyCardsData() {
 
 function renderMobileBotStickyCards() {
     if (!mobileBotStickyCardsEl) return;
-
     const stickyCards = getMobileStickyCardsData();
     mobileBotStickyCardsEl.innerHTML = '';
-
     if (stickyCards.length === 0) {
         const emptyEl = document.createElement('div');
         emptyEl.className = 'mobile-sticky-empty';
@@ -418,30 +427,31 @@ function renderMobileBotStickyCards() {
         mobileBotStickyCardsEl.appendChild(emptyEl);
         return;
     }
-
     stickyCards.forEach((cardData, index) => {
         const cardEl = document.createElement('div');
         cardEl.className = `mobile-sticky-card ${cardData.hidden ? 'hidden' : cardData.suit}`;
         cardEl.style.zIndex = String(index + 1);
         cardEl.style.transform = `rotate(${Math.min(10, index * 2)}deg)`;
-
         const valueEl = document.createElement('span');
         valueEl.className = 'mini-value';
         valueEl.textContent = cardData.hidden ? '?' : cardData.value;
-
         const suitEl = document.createElement('span');
         suitEl.className = 'mini-suit';
         suitEl.textContent = cardData.hidden ? '?' : SUIT_SYMBOLS[cardData.suit];
-
         cardEl.appendChild(valueEl);
         cardEl.appendChild(suitEl);
         mobileBotStickyCardsEl.appendChild(cardEl);
     });
 }
 
+function updateMobileBotStickyLabel() {
+    if (!mobileBotStickyLabelEl) return;
+    const difficultyText = formatDifficultyText(gameState.difficulty);
+    mobileBotStickyLabelEl.textContent = `Bot (${difficultyText})`;
+}
+
 function updateMobileBotStickyHealth() {
     if (!mobileBotStickyHealthFillEl || !mobileBotStickyHealthTextEl) return;
-
     if (isBotHealthEnabled()) {
         const hp = Math.max(0, gameState.botHealth);
         mobileBotStickyHealthFillEl.style.width = `${hp}%`;
@@ -461,19 +471,16 @@ function refreshMobileBotStickyVisibility() {
 
 function initMobileBotStickyObserver() {
     if (!botAreaEl || !mobileBotStickyEl) return;
-
     if (typeof IntersectionObserver === 'undefined') {
         botAreaVisible = false;
         refreshMobileBotStickyVisibility();
         return;
     }
-
     botAreaObserver = new IntersectionObserver((entries) => {
         const entry = entries[0];
         botAreaVisible = entry ? entry.isIntersecting : true;
         refreshMobileBotStickyVisibility();
     }, { threshold: 0.2 });
-
     botAreaObserver.observe(botAreaEl);
 }
 
@@ -501,25 +508,34 @@ function getDisplayedBotScore() {
 // Create card element
 function createCardElement(card, isHidden = false, isPlayer = false, index = 0) {
     const cardEl = document.createElement('div');
-    cardEl.className = `card ${card.suit}`;
-    if (isHidden) {
-        cardEl.classList.add('hidden-card');
+    if (card.isJoker) {
+        cardEl.className = 'card joker-card';
         cardEl.innerHTML = `
-            <span class="card-value">?</span>
-            <span class="card-suit">?</span>
+            <span class="joker-icon">🤡</span>
+            <span class="joker-text">JOKER</span>
+            <span class="joker-mask">🎭</span>
         `;
     } else {
-        if (isPlayer) {
-            cardEl.classList.add('player-card');
-            cardEl.dataset.index = index;
+        cardEl.className = `card ${card.suit}`;
+        if (isHidden) {
+            cardEl.classList.add('hidden-card');
+            cardEl.innerHTML = `
+                <span class="card-value">?</span>
+                <span class="card-suit">?</span>
+            `;
+        } else {
+            if (isPlayer) {
+                cardEl.classList.add('player-card');
+                cardEl.dataset.index = index;
+            }
+            if (card.isTableCard) {
+                cardEl.classList.add('table-card');
+            }
+            cardEl.innerHTML = `
+                <span class="card-value">${card.value}</span>
+                <span class="card-suit">${SUIT_SYMBOLS[card.suit]}</span>
+            `;
         }
-        if (card.isTableCard) {
-            cardEl.classList.add('table-card');
-        }
-        cardEl.innerHTML = `
-            <span class="card-value">${card.value}</span>
-            <span class="card-suit">${SUIT_SYMBOLS[card.suit]}</span>
-        `;
     }
     return cardEl;
 }
@@ -563,7 +579,7 @@ function renderTableCards() {
         cardEl.classList.add('table-card');
         playerTableEl.appendChild(cardEl);
     });
-
+    
     botTableEl.innerHTML = '';
     const revealedCardsCount = getRevealedBotCardsCount();
     gameState.botTable.forEach((card, index) => {
@@ -571,7 +587,6 @@ function renderTableCards() {
         cardEl.classList.add('table-card');
         botTableEl.appendChild(cardEl);
     });
-
     playerTableCountEl.textContent = gameState.playerTable.length;
     botTableCountEl.textContent = gameState.botTable.length;
     renderMobileBotStickyCards();
@@ -581,7 +596,6 @@ function renderTableCards() {
 function updateScores() {
     playerScoreEl.textContent = gameState.playerScore;
     botScoreEl.textContent = getDisplayedBotScore();
-
     // Update Target Display (Hidden logic)
     if (gameState.targetHidden && !gameState.gameOver) {
         targetNumberEl.textContent = '?';
@@ -594,7 +608,6 @@ function updateScores() {
 function updateHealthBars() {
     playerHealthBar.style.width = `${gameState.playerHealth}%`;
     playerHealthText.textContent = `${Math.max(0, gameState.playerHealth)}%`;
-
     if (isBotHealthEnabled()) {
         botHealthBar.style.width = `${gameState.botHealth}%`;
         botHealthText.textContent = `${Math.max(0, gameState.botHealth)}%`;
@@ -617,12 +630,34 @@ function selectCard(index) {
         playSound('select');
     }
     renderPlayerHand();
+    updateHitButtonForJoker();
+}
+
+function updateHitButtonForJoker() {
+    if (!hitBtn) return;
+    const selectedIndex = gameState.selectedCard;
+    if (selectedIndex !== null && gameState.playerHand[selectedIndex]?.isJoker) {
+        hitBtn.textContent = 'USE';
+        hitBtn.classList.add('btn-joker');
+        hitBtn.classList.remove('btn-hit');
+    } else {
+        hitBtn.textContent = 'HIT';
+        hitBtn.classList.remove('btn-joker');
+        hitBtn.classList.add('btn-hit');
+    }
 }
 
 function setPlayerControlsEnabled(enabled) {
     const canPlay = enabled && !gameState.gameOver;
     hitBtn.disabled = !canPlay;
     standBtn.disabled = !canPlay;
+    if (!canPlay) {
+        hitBtn.textContent = 'HIT';
+        hitBtn.classList.remove('btn-joker');
+        hitBtn.classList.add('btn-hit');
+    } else {
+        updateHitButtonForJoker();
+    }
 }
 
 function getNextActor(actor) {
@@ -631,16 +666,13 @@ function getNextActor(actor) {
 
 function proceedTurnFlow(message) {
     if (gameState.gameOver) return;
-
     gameState.actionsThisRound += 1;
     updateStatus(message);
-
     // Reveal target based on difficulty timing.
     if (shouldRevealTargetNow()) {
         gameState.targetHidden = false;
         updateScores();
     }
-
     // Each round has exactly 2 actions (one per side).
     if (gameState.actionsThisRound >= 2) {
         if (gameState.currentRound >= gameState.totalRounds) {
@@ -651,15 +683,15 @@ function proceedTurnFlow(message) {
         gameState.actionsThisRound = 0;
         gameState.currentTurn = gameState.firstActor;
         updateStatus(`Round ${gameState.currentRound}: ${gameState.currentTurn === 'player' ? 'Your turn' : "Bot's turn"}.`);
+        updateReshuffleUI();
     } else {
         gameState.currentTurn = getNextActor(gameState.currentTurn);
     }
-
     renderPlayerHand();
     renderTableCards();
     updateScores();
     setPlayerControlsEnabled(gameState.currentTurn === 'player');
-
+    updateReshuffleUI();
     if (gameState.currentTurn === 'bot' && !gameState.gameOver) {
         setTimeout(botTurn, 900);
     }
@@ -668,7 +700,16 @@ function proceedTurnFlow(message) {
 // Player hit action
 function playerHit() {
     if (gameState.gameOver || gameState.currentTurn !== 'player') return;
-    if (gameState.playerTable.length >= 3 || gameState.playerHand.length === 0) {
+    
+    const selectedCard = gameState.playerHand[gameState.selectedCard];
+    
+    // Handle joker card
+    if (selectedCard?.isJoker) {
+        jokerModal.classList.add('show');
+        return;
+    }
+    
+    if (gameState.playerHand.length === 0) {
         playerStand();
         return;
     }
@@ -676,17 +717,16 @@ function playerHit() {
         updateStatus('Please select a card first!');
         return;
     }
-
     // Move selected card to table
     const card = gameState.playerHand.splice(gameState.selectedCard, 1)[0];
     gameState.playerTable.push(card);
     gameState.playerScore = calculateScore(gameState.playerTable);
     gameState.selectedCard = null;
     playSound('hit');
-
     renderPlayerHand();
     renderTableCards();
     updateScores();
+    updateHitButtonForJoker();
     proceedTurnFlow(`Round ${gameState.currentRound}: You HIT ${card.value}${SUIT_SYMBOLS[card.suit]}. Score: ${gameState.playerScore}`);
 }
 
@@ -705,20 +745,61 @@ function playerStand() {
 // Bot's turn logic
 function botTurn() {
     if (gameState.gameOver || gameState.currentTurn !== 'bot') return;
-
+    
+    // Check if bot should use joker
+    if (gameState.botHasJoker && !gameState.jokerUsed && gameState.botHand.some(card => card.isJoker)) {
+        const jokerChance = {
+            'easy': 0.10,
+            'normal': 0.25,
+            'hard': 0.50,
+            'veryHard': 0.75
+        };
+        const chance = jokerChance[gameState.difficulty] || 0.25;
+        
+        if (Math.random() < chance) {
+            // Bot uses joker
+            const jokerIndex = gameState.botHand.findIndex(card => card.isJoker);
+            if (jokerIndex !== -1) {
+                gameState.botHand.splice(jokerIndex, 1);
+            }
+            gameState.botHasJoker = false;
+            gameState.jokerUsed = true;
+            
+            // Randomly choose action: reshuffle or swap
+            const action = Math.random() < 0.5 ? 'reshuffle' : 'swap';
+            
+            if (action === 'reshuffle') {
+                // Reshuffle player's hand
+                shuffleDeck(gameState.playerHand);
+                renderPlayerHand();
+                updateStatus('Bot used Joker! Your hand has been reshuffled.');
+            } else {
+                // Swap all cards
+                const tempHand = [...gameState.playerHand];
+                gameState.playerHand = [...gameState.botHand];
+                gameState.botHand = tempHand;
+                gameState.playerHasJoker = true;
+                renderPlayerHand();
+                renderBotHand();
+                updateStatus('Bot used Joker! All cards swapped!');
+            }
+            
+            playSound('hit');
+            updateJokerUI();
+            proceedTurnFlow(`Round ${gameState.currentRound}: Bot used JOKER!`);
+            return;
+        }
+    }
+    
     // Bot decision: hit or stand.
-    const botShouldHit = botDecideHit() && gameState.botTable.length < 3 && gameState.botHand.length > 0;
-
+    const botShouldHit = botDecideHit() && gameState.botHand.length > 0;
     if (botShouldHit) {
         // Very Hard chooses the best card for target precision; others stay random.
         const bestCardIndex = getBestBotCardIndex();
-        const chosenIndex = gameState.difficulty === 'veryHard' && bestCardIndex !== -1
-            ? bestCardIndex
-            : Math.floor(Math.random() * gameState.botHand.length);
+        const chosenIndex = gameState.difficulty === 'veryHard' && bestCardIndex !== -1 ? bestCardIndex : Math.floor(Math.random() * gameState.botHand.length);
         const card = gameState.botHand.splice(chosenIndex, 1)[0];
         gameState.botTable.push(card);
         gameState.botScore = calculateScore(gameState.botTable);
-
         renderBotHand();
         renderTableCards();
         updateScores();
@@ -737,25 +818,20 @@ function botDecideHit() {
     const difficulty = gameState.difficulty;
 
     if (difficulty === 'veryHard') {
-        if (gameState.botTable.length >= 3 || gameState.botHand.length === 0) {
+        if (gameState.botHand.length === 0) {
             return false;
         }
-
         const currentDiff = Math.abs(target - currentScore);
         const bestMove = analyzeBestBotMove();
         if (!bestMove) return false;
-
         // Always take exact match.
         if (bestMove.bestDiff === 0) return true;
-
         // Hit if it improves precision to target.
         if (bestMove.bestDiff < currentDiff) return true;
-
         // If equally good, only hit when moving closer from below target.
         if (bestMove.bestDiff === currentDiff && currentScore < target && bestMove.bestScore > currentScore) {
             return true;
         }
-
         return false;
     }
 
@@ -774,7 +850,6 @@ function botDecideHit() {
     if (possibleScores.includes(remaining)) {
         return true;
     }
-
     // Logic for Normal/Hard
     if (currentScore >= target - 2 && currentScore <= target) {
         // Very close, stand often
@@ -790,32 +865,24 @@ function botDecideHit() {
 
 function analyzeBestBotMove() {
     if (gameState.botHand.length === 0) return null;
-
     const target = gameState.targetNumber;
     const currentScore = gameState.botScore;
     let best = null;
-
     for (let i = 0; i < gameState.botHand.length; i++) {
         const cardValue = CARD_NUMERIC_VALUES[gameState.botHand[i].value];
         const nextScore = currentScore + cardValue;
         const nextDiff = Math.abs(target - nextScore);
-
         if (!best) {
             best = { index: i, bestScore: nextScore, bestDiff: nextDiff };
             continue;
         }
-
         const isBetterDiff = nextDiff < best.bestDiff;
         const sameDiffPreferNoOvershoot = nextDiff === best.bestDiff && nextScore <= target && best.bestScore > target;
-        const sameDiffBothSameSidePreferHigher = nextDiff === best.bestDiff &&
-            ((nextScore <= target && best.bestScore <= target && nextScore > best.bestScore) ||
-            (nextScore > target && best.bestScore > target && nextScore < best.bestScore));
-
+        const sameDiffBothSameSidePreferHigher = nextDiff === best.bestDiff && ((nextScore <= target && best.bestScore <= target && nextScore > best.bestScore) || (nextScore > target && best.bestScore > target && nextScore < best.bestScore));
         if (isBetterDiff || sameDiffPreferNoOvershoot || sameDiffBothSameSidePreferHigher) {
             best = { index: i, bestScore: nextScore, bestDiff: nextDiff };
         }
     }
-
     return best;
 }
 
@@ -828,10 +895,8 @@ function getBestBotCardIndex() {
 function calculateDamage(winnerScore, target) {
     const diff = Math.abs(target - winnerScore);
     // Base damage 10, Bonus: closer to target = more damage.
-    // Max damage if exact hit (diff 0) = 10 + 20 = 30?
-    // Let's say: 20 base + (Target - Diff). If target is 20, diff 0 -> 40 damage.
-    // Or simpler: 30 - diff. Min 10 damage.
-    const damage = Math.max(10, 30 - (diff * 2));
+    // Adjusted for 5 cards (max score ~55 with 5 Aces)
+    const damage = Math.max(10, 40 - (diff * 1.5));
     return damage;
 }
 
@@ -853,25 +918,20 @@ function applyPendingHealthUpdate() {
 function determineWinner() {
     if (gameState.winnerEvaluationInProgress) return;
     gameState.winnerEvaluationInProgress = true;
-
-    updateStatus('Round 4: Revealing all bot cards...');
+    updateStatus('Round 7: Revealing all bot cards...');
     gameState.gameOver = true;
     hitBtn.disabled = true;
     standBtn.disabled = true;
-
     renderTableCards();
     updateScores();
-
     // Reveal target if hidden
     const target = gameState.targetNumber;
     const playerExact = gameState.playerScore === target;
     const botExact = gameState.botScore === target;
     const playerDiff = Math.abs(target - gameState.playerScore);
     const botDiff = Math.abs(target - gameState.botScore);
-
     let winner, message;
     let damageDealt = 0;
-
     // Priority 1: exact target check
     if (playerExact && botExact) {
         winner = 'tie';
@@ -896,7 +956,6 @@ function determineWinner() {
         winner = 'tie';
         message = `Tie! Same difference from target ${target}.`;
     }
-
     // Keep botHand area strictly for remaining hand cards only.
     // Played cards stay in botTable area.
     const botHandCardsToShow = [...gameState.botHand];
@@ -905,7 +964,6 @@ function determineWinner() {
         const cardEl = createCardElement(card);
         botHandEl.appendChild(cardEl);
     });
-
     // Queue health changes; apply only when player clicks "Play Again".
     if (winner === 'player' && isBotHealthEnabled()) {
         message += ` You will deal ${damageDealt} damage to Bot after Play Again.`;
@@ -913,10 +971,8 @@ function determineWinner() {
         damageDealt = Math.round(damageDealt * getBotDamageMultiplier());
         message += ` Bot will deal ${damageDealt} damage to you after Play Again.`;
     }
-
     gameState.pendingHealthUpdate = { winner, damageDealt };
-
-    updateStatus('Round 4: Evaluating winner...');
+    updateStatus('Round 7: Evaluating winner...');
     setTimeout(() => {
         endGame(winner, message);
     }, 2000);
@@ -925,14 +981,12 @@ function determineWinner() {
 // End game function
 function endGame(winner, message) {
     if (resultModal.classList.contains('show')) return;
-
     // Record player result each completed round so History always updates.
     if (winner === 'player') {
         addMatchHistory('win');
     } else if (winner === 'bot') {
         addMatchHistory('loss');
     }
-
     // Check if game continues (Health system)
     if (gameState.playerHealth <= 0) {
         playSound('loss');
@@ -942,7 +996,6 @@ function endGame(winner, message) {
         resultModal.classList.add('show');
         return;
     }
-
     if (isBotHealthEnabled() && gameState.botHealth <= 0) {
         playSound('win');
         resultTitle.textContent = '👤 You Win the Game!';
@@ -951,7 +1004,6 @@ function endGame(winner, message) {
         resultModal.classList.add('show');
         return;
     }
-
     // Show result modal for the round
     if (winner === 'player') {
         resultTitle.textContent = '👤 You Win!';
@@ -966,7 +1018,6 @@ function endGame(winner, message) {
         resultTitle.style.color = '#ffd93d';
         playSound('tie');
     }
-
     resultMessage.innerHTML = `
         <strong>Target:</strong> ${gameState.targetNumber}<br>
         <strong>Your Score:</strong> ${gameState.playerScore}<br>
@@ -981,6 +1032,234 @@ function endGame(winner, message) {
 // Update status message
 function updateStatus(message) {
     gameStatusEl.textContent = message;
+}
+
+function performReshuffle(actor) {
+    const isPlayer = actor === 'player';
+    const reshuffleCount = isPlayer ? gameState.playerReshuffleCount : gameState.botReshuffleCount;
+    
+    if (reshuffleCount >= gameState.maxReshuffles) {
+        if (isPlayer) {
+            updateStatus('You have used all your reshuffles!');
+        }
+        return;
+    }
+    
+    const hand = isPlayer ? gameState.playerHand : gameState.botHand;
+    const nonJokerIndices = hand.map((card, index) => !card.isJoker ? index : -1).filter(i => i !== -1);
+    
+    if (nonJokerIndices.length === 0) {
+        if (isPlayer) {
+            updateStatus('No cards to reshuffle!');
+        }
+        return;
+    }
+    
+    // Randomly select cards to replace (1 to 3 cards, only non-jokers)
+    const numCardsToReplace = Math.min(Math.floor(Math.random() * 3) + 1, nonJokerIndices.length);
+    const indicesToReplace = [];
+    
+    while (indicesToReplace.length < numCardsToReplace) {
+        const randomIndex = Math.floor(Math.random() * nonJokerIndices.length);
+        if (!indicesToReplace.includes(nonJokerIndices[randomIndex])) {
+            indicesToReplace.push(nonJokerIndices[randomIndex]);
+        }
+    }
+    
+    // Remove selected cards and add new ones
+    const deck = createDeck();
+    shuffleDeck(deck);
+    
+    // Sort indices in descending order to remove from end first
+    indicesToReplace.sort((a, b) => b - a);
+    
+    for (const index of indicesToReplace) {
+        hand.splice(index, 1);
+    }
+    
+    // Add new cards
+    const newCards = drawCards(deck, numCardsToReplace);
+    hand.push(...newCards);
+    
+    // Maybe add joker after reshuffle (only if not used yet and not already have one)
+    if (!gameState.jokerUsed && !gameState.playerHasJoker && !gameState.botHasJoker && Math.random() < 0.10) {
+        if (isPlayer) {
+            hand.push({ value: 'JOKER', suit: 'JOKER', isJoker: true });
+            gameState.playerHasJoker = true;
+        } else {
+            hand.push({ value: 'JOKER', suit: 'JOKER', isJoker: true });
+            gameState.botHasJoker = true;
+        }
+    }
+    
+    // Update reshuffle count
+    if (isPlayer) {
+        gameState.playerReshuffleCount++;
+    } else {
+        gameState.botReshuffleCount++;
+    }
+    
+    // Update UI
+    updateReshuffleUI();
+    
+    if (isPlayer) {
+        renderPlayerHand();
+        updateStatus(`You reshuffled ${numCardsToReplace} card(s). (${gameState.playerReshuffleCount}/${gameState.maxReshuffles})`);
+        playSound('select');
+    } else {
+        renderBotHand();
+        updateStatus(`Bot used reshuffle. (${gameState.botReshuffleCount}/${gameState.maxReshuffles})`);
+        playSound('stand');
+    }
+}
+
+function useJoker(action) {
+    if (gameState.jokerUsed || !gameState.playerHasJoker) return;
+    
+    if (action === 'reshuffle') {
+        // Remove joker from hand first
+        const jokerIndex = gameState.playerHand.findIndex(card => card.isJoker);
+        if (jokerIndex !== -1) {
+            gameState.playerHand.splice(jokerIndex, 1);
+        }
+        gameState.jokerUsed = true;
+        gameState.playerHasJoker = false;
+        // Reshuffle opponent's hand
+        const botHand = gameState.botHand;
+        shuffleDeck(botHand);
+        renderBotHand();
+        updateStatus('Joker used! Bot hand reshuffled.');
+        playSound('hit');
+    } else if (action === 'swap') {
+        // Show opponent's cards first, but don't remove joker yet
+        showOpponentCards();
+        return; // Wait for confirmation
+    }
+    
+    renderPlayerHand();
+    updateJokerUI();
+    updateHitButtonForJoker();
+}
+
+function showOpponentCards() {
+    opponentPreviewCards.innerHTML = '';
+    gameState.botHand.forEach(card => {
+        const cardEl = createCardElement(card, false, false, 0);
+        opponentPreviewCards.appendChild(cardEl);
+    });
+    opponentPreviewModal.classList.add('show');
+}
+
+function swapAllCards() {
+    // Remove joker from player hand if exists
+    const playerJokerIndex = gameState.playerHand.findIndex(card => card.isJoker);
+    const playerHadJoker = playerJokerIndex !== -1;
+    if (playerJokerIndex !== -1) {
+        gameState.playerHand.splice(playerJokerIndex, 1);
+    }
+    
+    // Remove joker from bot hand if exists
+    const botJokerIndex = gameState.botHand.findIndex(card => card.isJoker);
+    const botHadJoker = botJokerIndex !== -1;
+    if (botJokerIndex !== -1) {
+        gameState.botHand.splice(botJokerIndex, 1);
+    }
+    
+    // Swap player and bot hands
+    const tempHand = [...gameState.playerHand];
+    gameState.playerHand = [...gameState.botHand];
+    gameState.botHand = tempHand;
+    
+    // If player had joker, they get it after swap (but it's now used)
+    if (playerHadJoker) {
+        gameState.playerHasJoker = false;
+        gameState.jokerUsed = true;
+    }
+    // If bot had joker, give to player
+    if (botHadJoker) {
+        gameState.playerHand.push({ value: 'JOKER', suit: 'JOKER', isJoker: true });
+        gameState.playerHasJoker = true;
+    }
+    
+    // Recalculate scores
+    gameState.playerScore = calculateScore(gameState.playerTable);
+    gameState.botScore = calculateScore(gameState.botTable);
+    
+    // Update UI
+    renderPlayerHand();
+    renderBotHand();
+    updateScores();
+    updateStatus('All cards swapped with opponent!');
+    playSound('hit');
+    
+    opponentPreviewModal.classList.remove('show');
+    updateJokerUI();
+    updateHitButtonForJoker();
+}
+
+function checkForJokerInHand(hand, owner) {
+    if (gameState.jokerUsed) return;
+    
+    const hasJoker = hand.some(card => card.isJoker);
+    const isPlayer = owner === 'player';
+    
+    if (hasJoker) {
+        if (isPlayer) {
+            gameState.playerHasJoker = true;
+        } else {
+            gameState.botHasJoker = true;
+        }
+        updateJokerUI();
+    }
+}
+
+function updateReshuffleUI() {
+    playerReshuffleCountEl.textContent = gameState.playerReshuffleCount;
+    botReshuffleCountEl.textContent = gameState.botReshuffleCount;
+    
+    // Update reshuffle button state
+    if (reshuffleBtn) {
+        reshuffleBtn.disabled = gameState.playerReshuffleCount >= gameState.maxReshuffles || gameState.gameOver || gameState.currentTurn !== 'player';
+    }
+}
+
+// Render joker card in player table area
+function renderJokerCard() {
+    const existingJoker = playerTableEl.querySelector('.joker-card');
+    
+    if (gameState.playerHasJoker && !gameState.jokerUsed) {
+        if (!existingJoker) {
+            const jokerCard = document.createElement('div');
+            jokerCard.className = 'card joker-card';
+            jokerCard.id = 'playerJokerCard';
+            jokerCard.innerHTML = `
+                <span class="joker-icon">🤡</span>
+                <span class="joker-text">JOKER</span>
+                <span class="joker-mask">🎭</span>
+            `;
+            jokerCard.addEventListener('click', () => {
+                if (!gameState.gameOver && gameState.currentTurn === 'player') {
+                    jokerModal.classList.add('show');
+                }
+            });
+            playerTableEl.appendChild(jokerCard);
+        }
+    } else {
+        if (existingJoker) {
+            existingJoker.remove();
+        }
+    }
+}
+
+function updateJokerUI() {
+    if (jokerBtn) {
+        const hasJokerInHand = gameState.playerHand.some(card => card.isJoker);
+        if (!hasJokerInHand && gameState.playerHasJoker && !gameState.jokerUsed) {
+            jokerBtn.style.display = 'inline-block';
+        } else {
+            jokerBtn.style.display = 'none';
+        }
+    }
 }
 
 function openRulesModal() {
@@ -1010,7 +1289,8 @@ function blurActiveElement() {
 function startNewGame() {
     // Reset game state
     gameState = {
-        ...gameState, // Keep difficulty
+        ...gameState,
+        // Keep difficulty
         targetNumber: 0,
         playerHand: [],
         botHand: [],
@@ -1018,7 +1298,7 @@ function startNewGame() {
         botTable: [],
         playerScore: 0,
         botScore: 0,
-        totalRounds: 3,
+        totalRounds: 6,
         currentRound: 1,
         actionsThisRound: 0,
         firstActor: Math.random() < 0.5 ? 'player' : 'bot',
@@ -1027,28 +1307,44 @@ function startNewGame() {
         winnerEvaluationInProgress: false,
         pendingHealthUpdate: null,
         gameOver: false,
-        targetHidden: shouldHideTargetAtStart()
+        targetHidden: shouldHideTargetAtStart(),
+        playerReshuffleCount: 0,
+        botReshuffleCount: 0
     };
-
     // Reset health if game over previously
     if (gameState.playerHealth <= 0 || gameState.botHealth <= 0) {
         gameState.playerHealth = 100;
         gameState.botHealth = 100;
         updateHealthBars();
     }
-
+    // Reset joker state for new game
+    gameState.playerHasJoker = false;
+    gameState.botHasJoker = false;
+    gameState.jokerUsed = false;
     gameState.currentTurn = gameState.firstActor;
-
     // Create and shuffle deck
     const deck = shuffleDeck(createDeck());
-
-    // Generate target number (between 6 and 30)
-    gameState.targetNumber = Math.floor(Math.random() * 25) + 6;
-
-    // Deal cards
-    gameState.playerHand = drawCards(deck, 5);
-    gameState.botHand = drawCards(deck, 5);
-
+    // Generate target number (between 8 and 50)
+    gameState.targetNumber = Math.floor(Math.random() * 43) + 8;
+    // Deal cards (5 main cards)
+    gameState.playerHand = drawCards(deck, 5, false);
+    gameState.botHand = drawCards(deck, 5, false);
+    // Add joker as 6th card (power up) if not used yet
+    if (!gameState.jokerUsed && !gameState.playerHasJoker && !gameState.botHasJoker) {
+        if (Math.random() < 0.10) {
+            // 10% chance total - give to player or bot randomly
+            if (Math.random() < 0.5) {
+                // Give to player
+                gameState.playerHand.push({ value: 'JOKER', suit: 'JOKER', isJoker: true });
+                gameState.playerHasJoker = true;
+            } else {
+                // Give to bot
+                gameState.botHand.push({ value: 'JOKER', suit: 'JOKER', isJoker: true });
+                gameState.botHasJoker = true;
+            }
+        }
+    }
+    updateJokerUI();
     // Update UI
     targetNumberEl.textContent = gameState.targetNumber;
     renderPlayerHand();
@@ -1057,16 +1353,15 @@ function startNewGame() {
     updateScores();
     updateDifficultyDisplay();
     updateHealthBars();
-
+    updateMobileBotStickyLabel();
+    updateReshuffleUI();
+    updateJokerUI();
     // Enable buttons based on current turn
     setPlayerControlsEnabled(gameState.currentTurn === 'player');
-
     // Hide modal
     resultModal.classList.remove('show');
     blurActiveElement();
-
     updateStatus(`Game started! Round 1. ${gameState.currentTurn === 'player' ? 'Your turn first.' : 'Bot moves first.'}`);
-
     if (gameState.currentTurn === 'bot') {
         setTimeout(botTurn, 900);
     }
@@ -1076,20 +1371,19 @@ function selectDifficulty(diff) {
     // Ignore accidental key/click events when difficulty modal is hidden.
     if (!difficultyModal.classList.contains('show')) return;
     if (diff === 'veryHard' && !gameProgress.veryHardUnlocked) return;
-
     gameState.difficulty = diff;
     gameState.playerHealth = 100;
     gameState.botHealth = 100;
     difficultyModal.classList.remove('show');
     blurActiveElement();
     updateDifficultyDisplay();
+    updateMobileBotStickyLabel();
     startNewGame();
 }
 
 // Event listeners
 hitBtn.addEventListener('click', playerHit);
 standBtn.addEventListener('click', playerStand);
-
 newGameBtn.addEventListener('click', () => {
     // If game is over, show difficulty modal again? Or just restart.
     // Let's just restart with same difficulty for simplicity, or reset health.
@@ -1099,19 +1393,15 @@ newGameBtn.addEventListener('click', () => {
         startNewGame();
     }
 });
-
 playAgainBtn.addEventListener('click', () => {
     // Prevent hidden modal button from restarting the game mid-match.
     if (!resultModal.classList.contains('show')) return;
-
     const pendingBeforeApply = gameState.pendingHealthUpdate ? { ...gameState.pendingHealthUpdate } : null;
     applyPendingHealthUpdate();
-
     // Count Hard mode wins toward Very Hard unlock (saved per browser via localStorage).
     if (pendingBeforeApply && pendingBeforeApply.winner === 'player' && gameState.botHealth <= 0) {
         registerHardModeWinIfUnlocked();
     }
-
     // Avoid stacked modals and always continue instantly to a new game.
     // If someone is KO, restore both HP then restart with same difficulty.
     if (gameState.playerHealth <= 0 || gameState.botHealth <= 0) {
@@ -1119,10 +1409,8 @@ playAgainBtn.addEventListener('click', () => {
         gameState.botHealth = 100;
         updateHealthBars();
     }
-
     startNewGame();
 });
-
 rulesBtn.addEventListener('click', openRulesModal);
 historyBtn.addEventListener('click', openHistoryModal);
 changeDifficultyBtn.addEventListener('click', () => difficultyModal.classList.add('show'));
@@ -1138,19 +1426,41 @@ historyModal.addEventListener('click', (event) => {
         closeHistoryModal();
     }
 });
-
 if (volumeSlider) {
     volumeSlider.addEventListener('input', (event) => {
         setMasterVolumeFromPercent(event.target.value);
     });
 }
-
 window.addEventListener('resize', refreshMobileBotStickyVisibility);
-
 easyBtn.addEventListener('click', () => selectDifficulty('easy'));
 normalBtn.addEventListener('click', () => selectDifficulty('normal'));
 hardBtn.addEventListener('click', () => selectDifficulty('hard'));
 veryHardBtn.addEventListener('click', () => selectDifficulty('veryHard'));
+reshuffleBtn.addEventListener('click', () => performReshuffle('player'));
+jokerBtn.addEventListener('click', () => jokerModal.classList.add('show'));
+jokerReshuffleBtn.addEventListener('click', () => {
+    jokerModal.classList.remove('show');
+    useJoker('reshuffle');
+});
+jokerSwapBtn.addEventListener('click', () => {
+    jokerModal.classList.remove('show');
+    useJoker('swap');
+});
+confirmSwapBtn.addEventListener('click', swapAllCards);
+cancelSwapBtn.addEventListener('click', () => {
+    opponentPreviewModal.classList.remove('show');
+    updateHitButtonForJoker();
+});
+opponentPreviewModal.addEventListener('click', (event) => {
+    if (event.target === opponentPreviewModal) {
+        opponentPreviewModal.classList.remove('show');
+    }
+});
+jokerModal.addEventListener('click', (event) => {
+    if (event.target === jokerModal) {
+        jokerModal.classList.remove('show');
+    }
+});
 
 // Initialize game - Show difficulty modal first
 window.onload = () => {
@@ -1163,9 +1473,6 @@ window.onload = () => {
     initMobileBotStickyObserver();
     renderMobileBotStickyCards();
     refreshMobileBotStickyVisibility();
+    updateMobileBotStickyLabel();
     difficultyModal.classList.add('show');
 };
-
-
-
-
